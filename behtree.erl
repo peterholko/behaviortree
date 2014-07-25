@@ -4,7 +4,7 @@
 
 %% API
 -export([start/2,
-         setup/3,
+         start/3,
          get_status/1]).
 
 %% gen_server callbacks
@@ -37,7 +37,7 @@
 start(Id, NodeType) ->
     gen_server:start({global, {behtree, Id}}, ?MODULE, [NodeType], []).
 
-setup(Id, NodeType, Func) ->
+start(Id, NodeType, Func) ->
     gen_server:start({global, {behtree, Id}}, ?MODULE, [NodeType, Func], []).
 
 get_status(Pid) ->
@@ -121,12 +121,16 @@ handle_cast(run, State) ->
 %%--------------------------------------------------------------------
 handle_info(Info, State) ->
      
-    NewState = case Info of
-                   success ->
-                       State#state { status = success};
-                   _ ->
-                       State
-               end,
+    NewStatus = case Info of 
+                    success ->
+                        success;
+                    failure ->
+                        failure;
+                    _ ->
+                        erlang:error("Invalid result from action node")
+                end,
+
+    NewState = State#state {status = NewStatus},
 
     {noreply, NewState}.
 
@@ -175,8 +179,9 @@ run_action(Func) ->
 
 run_action_wrapper(Func, CallerPID) ->
 
-    Func(),
-    CallerPID ! success.
+    Result = Func(),
+    io:fwrite("Result: ~w~n", [Result]),
+    CallerPID ! Result.
 
 run_sequence(State) ->
     Children = State#state.children,
@@ -199,8 +204,10 @@ run_sequence(State) ->
                                State#state {sequence_num = SequenceNum + 1}
                        end;
                    failure ->
+                       io:fwrite("Sequence failure~n"),
                        State#state {status = failure};
                    running ->
                        State
                end,
     NewState.
+
